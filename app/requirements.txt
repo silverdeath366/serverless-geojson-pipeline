@@ -1,0 +1,6 @@
+psycopg2-binary
+geojson
+watchdog
+flask
+geopandas
+boto3

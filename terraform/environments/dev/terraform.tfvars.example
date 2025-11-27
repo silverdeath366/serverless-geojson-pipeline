@@ -1,0 +1,21 @@
+# AWS Configuration
+aws_region = "us-east-1"
+environment = "dev"
+
+# VPC Configuration
+vpc_cidr = "10.0.0.0/16"
+
+# S3 Configuration
+s3_bucket_name = "geojson-pipeline-dev"
+
+# Database Configuration
+db_name     = "gisdb"
+db_username = "postgres"
+db_password = "your-secure-password-here"
+
+# ECR Configuration
+ecr_repository_name = "geojson-processor"
+
+# Lambda Configuration
+lambda_function_name = "geojson-processor"
+lambda_image_tag    = "latest" 

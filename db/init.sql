@@ -1,0 +1,8 @@
+CREATE EXTENSION IF NOT EXISTS postgis;
+
+CREATE TABLE IF NOT EXISTS geo_data (
+  id SERIAL PRIMARY KEY,
+  name TEXT,
+  geom GEOMETRY(Geometry, 4326),
+  uploaded_at TIMESTAMP DEFAULT NOW()
+);

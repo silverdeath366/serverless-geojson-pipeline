@@ -1,0 +1,56 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+*.tfvars.backup
+
+# Lambda build artifacts
+**/lambda_function.zip
+**/lambda_function.zip.backup
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.local
+
+# Temporary files
+*.tmp
+*.temp
+/tmp/
+**/PACKAGE_DIR*/
+
+# Test files
+test_*.geojson
+/tmp/*.geojson
+
+# Security scan reports
+security-reports/
+bandit-report.json
+*.snyk
