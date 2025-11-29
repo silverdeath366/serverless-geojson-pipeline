@@ -93,10 +93,11 @@ module "lambda" {
   memory_size   = var.lambda_memory_size
   s3_bucket_name = var.s3_bucket_name
   
-  vpc_config = {
-    subnet_ids         = module.vpc.private_subnet_ids
-    security_group_ids = [module.database.lambda_security_group_id]
-  }
+  # Temporarily disabled VPC config to test CloudWatch Logs connectivity
+  # vpc_config = {
+  #   subnet_ids         = module.vpc.private_subnet_ids
+  #   security_group_ids = [module.database.lambda_security_group_id]
+  # }
   
   environment_variables = {
     DB_HOST     = module.database.db_endpoint

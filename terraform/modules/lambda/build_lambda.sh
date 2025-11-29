@@ -17,6 +17,9 @@ fi
 rm -rf "$BUILD_DIR"
 mkdir -p "$PACKAGE_DIR"
 
+# Also clean up any old zip file to ensure fresh build
+rm -f "$OUTPUT_ZIP"
+
 # Verify source files exist
 if [ ! -f "$APP_DIR/lambda_handler.py" ]; then
   echo "Error: lambda_handler.py not found at $APP_DIR/lambda_handler.py"
@@ -46,10 +49,10 @@ find . -type f -name "*.pyc" -delete 2>/dev/null || true
 find . -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
 find . -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
 
-# Create zip file
-cd "$BUILD_DIR" || exit 1
+# Create zip file from package directory contents (not the package directory itself)
+cd "$PACKAGE_DIR" || exit 1
 mkdir -p "$(dirname "$OUTPUT_ZIP")" || exit 1
-zip -r "$OUTPUT_ZIP" package/* -q || exit 1
+zip -r "$OUTPUT_ZIP" . -q || exit 1
 
 echo "Lambda package built successfully at $OUTPUT_ZIP"
 

@@ -4,13 +4,14 @@ Core GeoJSON processing module for Lambda and local execution.
 import os
 import json
 import logging
-import psycopg2
-from typing import Dict, Any
+# Lazy import psycopg2 to allow Lambda to start even if import fails
+# import psycopg2  # Moved inside function
+from typing import Dict, Any, List
 
 logger = logging.getLogger(__name__)
 
 
-def get_db_conn() -> psycopg2.extensions.connection:
+def get_db_conn():  # Type hint removed since psycopg2 is lazy imported
     """
     Create and return a PostgreSQL database connection with retry logic.
     
@@ -26,8 +27,10 @@ def get_db_conn() -> psycopg2.extensions.connection:
         
     Raises:
         psycopg2.Error: If connection fails after retries
+        ImportError: If psycopg2 cannot be imported
     """
     import time
+    import psycopg2  # Lazy import - allows Lambda to start even if this fails
     
     db_host = os.getenv("DB_HOST", "")
     db_port = os.getenv("DB_PORT", "5432")
@@ -71,9 +74,68 @@ def get_db_conn() -> psycopg2.extensions.connection:
                 raise
 
 
+def validate_geojson_feature(feature: Dict[str, Any], index: int) -> Dict[str, Any]:
+    """
+    Validate a GeoJSON feature using Shapely for geometry validation.
+    
+    Args:
+        feature: Feature dictionary to validate
+        index: Feature index for error reporting
+        
+    Returns:
+        Validated feature dictionary
+        
+    Raises:
+        ValueError: If feature is invalid
+    """
+    # Lazy import shapely to avoid Lambda import issues
+    try:
+        from shapely.geometry import shape
+        from shapely.validation import explain_validity
+    except ImportError:
+        logger.warning("Shapely not available, skipping geometry validation")
+        # Fall back to basic validation
+        if not isinstance(feature, dict):
+            raise ValueError(f"Feature {index}: Feature must be a dictionary")
+        if feature.get("type") != "Feature":
+            raise ValueError(f"Feature {index}: Feature type must be 'Feature'")
+        if "geometry" not in feature:
+            raise ValueError(f"Feature {index}: Feature must have a 'geometry' field")
+        return feature
+    
+    # Validate feature structure
+    if not isinstance(feature, dict):
+        raise ValueError(f"Feature {index}: Feature must be a dictionary")
+    
+    if feature.get("type") != "Feature":
+        raise ValueError(f"Feature {index}: Feature type must be 'Feature'")
+    
+    if "geometry" not in feature:
+        raise ValueError(f"Feature {index}: Feature must have a 'geometry' field")
+    
+    geometry = feature.get("geometry")
+    if not isinstance(geometry, dict):
+        raise ValueError(f"Feature {index}: Geometry must be a dictionary")
+    
+    if "type" not in geometry or "coordinates" not in geometry:
+        raise ValueError(f"Feature {index}: Geometry must have 'type' and 'coordinates' fields")
+    
+    # Validate geometry using Shapely
+    try:
+        shapely_geom = shape(geometry)
+        if not shapely_geom.is_valid:
+            validity_explanation = explain_validity(shapely_geom)
+            raise ValueError(f"Feature {index}: Invalid geometry: {validity_explanation}")
+    except Exception as e:
+        raise ValueError(f"Feature {index}: Geometry validation failed: {str(e)}")
+    
+    return feature
+
+
 def process_geojson(filepath: str) -> int:
     """
     Process a GeoJSON file and insert features into PostGIS database.
+    Enhanced with validation similar to geojson-ingestion-saas.
     
     Args:
         filepath: Path to the GeoJSON file to process
@@ -105,24 +167,57 @@ def process_geojson(filepath: str) -> int:
         raise ValueError(f"GeoJSON type must be 'FeatureCollection', got '{data.get('type')}'")
 
     features = data.get("features", [])
+    if not isinstance(features, list):
+        raise ValueError("Features must be an array")
+    
     if not features:
         logger.warning(f"No features found in {filepath}")
         return 0
 
     logger.info(f"Processing {len(features)} features from {filepath}")
     
+    # Validate and process features
+    validated_features = []
+    for i, feature in enumerate(features):
+        try:
+            validated_feature = validate_geojson_feature(feature, i)
+            validated_features.append(validated_feature)
+        except ValueError as e:
+            logger.warning(f"Feature {i} validation failed: {e}")
+            continue
+        except Exception as e:
+            logger.warning(f"Feature {i} validation error: {e}")
+            continue
+    
+    if not validated_features:
+        logger.warning(f"No valid features found in {filepath}")
+        return 0
+    
+    logger.info(f"Validated {len(validated_features)} out of {len(features)} features")
+    
     try:
         with get_db_conn() as conn:
             with conn.cursor() as cur:
+                # Ensure table exists with proper schema
+                cur.execute("""
+                    CREATE EXTENSION IF NOT EXISTS postgis;
+                    CREATE TABLE IF NOT EXISTS geo_data (
+                        id SERIAL PRIMARY KEY,
+                        name TEXT,
+                        geom GEOMETRY(Geometry, 4326),
+                        uploaded_at TIMESTAMP DEFAULT NOW()
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_geo_data_geom ON geo_data USING GIST (geom);
+                """)
+                conn.commit()
+                
                 inserted_count = 0
-                for idx, feature in enumerate(features):
+                errors = []
+                
+                for idx, feature in enumerate(validated_features):
                     try:
-                        if not isinstance(feature, dict) or feature.get("type") != "Feature":
-                            logger.warning(f"Skipping invalid feature at index {idx}")
-                            continue
-                        
                         properties = feature.get("properties", {})
-                        name = properties.get("name", f"Feature_{idx}")
+                        name = properties.get("name") or properties.get("NAME") or properties.get("id") or f"Feature_{idx}"
                         geometry = feature.get("geometry")
                         
                         if not geometry:
@@ -136,14 +231,18 @@ def process_geojson(filepath: str) -> int:
                         )
                         inserted_count += 1
                     except Exception as e:
-                        logger.error(f"Error inserting feature {idx}: {e}")
+                        error_msg = f"Error inserting feature {idx}: {e}"
+                        logger.error(error_msg)
+                        errors.append(error_msg)
                         # Continue processing other features
                         continue
                 
                 conn.commit()
                 logger.info(f"Successfully inserted {inserted_count} features into database")
+                if errors:
+                    logger.warning(f"Encountered {len(errors)} errors during processing")
                 return inserted_count
                 
-    except psycopg2.Error as e:
+    except Exception as e:
         logger.error(f"Database error while processing {filepath}: {e}")
         raise

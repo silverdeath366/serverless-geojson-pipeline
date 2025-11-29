@@ -112,14 +112,20 @@ resource "aws_lambda_function" "main" {
   source_code_hash = fileexists("${path.module}/lambda_function.zip") ? filebase64sha256("${path.module}/lambda_function.zip") : null
   function_name    = var.function_name
   role            = aws_iam_role.lambda_role.arn
-  handler         = var.handler
+  handler         = "lambda_handler.lambda_handler"
   runtime         = var.runtime
   timeout         = var.timeout
   memory_size     = var.memory_size
 
-  vpc_config {
-    subnet_ids         = var.vpc_config.subnet_ids
-    security_group_ids = var.vpc_config.security_group_ids
+  # Temporarily disable VPC to allow internet access (for CloudWatch Logs)
+  # This is a diagnostic step to test if VPC connectivity is blocking logs
+  # Uncomment below to re-enable VPC access (needed for RDS)
+  dynamic "vpc_config" {
+    for_each = var.vpc_config != null ? [1] : []
+    content {
+      subnet_ids         = var.vpc_config.subnet_ids
+      security_group_ids = var.vpc_config.security_group_ids
+    }
   }
 
   environment {

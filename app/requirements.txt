@@ -1,6 +1,10 @@
 psycopg2-binary
 geojson
 watchdog
-flask
-geopandas
-boto3
+flask>=3.0.0
+werkzeug>=3.0.3
+geopandas>=0.14.0
+fiona>=1.10b2
+boto3>=1.35.0
+urllib3>=2.5.0
+zipp>=3.19.1

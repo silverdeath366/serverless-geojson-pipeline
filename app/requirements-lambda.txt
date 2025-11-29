@@ -1,4 +1,7 @@
 psycopg2-binary
 geojson
-boto3
+boto3>=1.35.0
+urllib3>=2.5.0
+zipp>=3.19.1
+shapely>=2.0.2
 

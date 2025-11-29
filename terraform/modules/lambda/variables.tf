@@ -38,6 +38,7 @@ variable "vpc_config" {
     subnet_ids         = list(string)
     security_group_ids = list(string)
   })
+  default = null  # Temporarily optional for VPC connectivity testing
 }
 
 variable "environment_variables" {
